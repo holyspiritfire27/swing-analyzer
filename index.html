@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>前踢動作分析系統 (完美截圖版)</title>
+    <title>前踢動作分析系統 (完美無黑屏版)</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
     
@@ -160,7 +160,7 @@
         <div class="bottom-panel">
             <div class="angle-info">目前角度: <span id="currentAngle">0</span>°</div>
             <div class="angle-info" id="finalAngleText">最高點角度: <span id="maxAngle">0</span>°</div>
-            <button id="downloadBtn">⬇️ 下載截圖</button>
+            <button id="downloadBtn">⬇️ 儲存截圖</button>
         </div>
     </div>
 
@@ -221,26 +221,31 @@
             return Math.acos(dotProduct / (mag1 * mag2)) * (180 / Math.PI);
         }
 
-        // 🔥 擷取影像的專屬函數 (修正 1 & 2：使用 videoElement + requestAnimationFrame)
+        // 🔥 終極截圖函數 (移除 requestAnimationFrame，加入 readyState 與尺寸雙重防護)
         function captureMaxPointFrame(landmarks) {
-            requestAnimationFrame(() => {
-                bufferCtx.save();
-                bufferCtx.clearRect(0, 0, bufferCanvas.width, bufferCanvas.height);
-                
-                // 1. 抓取最穩定的原始影片畫面
-                if (useFrontCamera) {
-                    bufferCtx.translate(bufferCanvas.width, 0);
-                    bufferCtx.scale(-1, 1);
-                }
-                bufferCtx.drawImage(videoElement, 0, 0, bufferCanvas.width, bufferCanvas.height);
-                
-                // 2. 補上 AI 骨架 (保留測量證據)
-                if (landmarks) {
-                    drawConnectors(bufferCtx, landmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
-                    drawLandmarks(bufferCtx, landmarks, {color: '#FF0000', lineWidth: 2});
-                }
-                bufferCtx.restore();
-            });
+            // 確保影像已載入且有尺寸
+            if (videoElement.readyState < 2) return; 
+            if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) return;
+
+            bufferCtx.save();
+            bufferCtx.clearRect(0, 0, bufferCanvas.width, bufferCanvas.height);
+            
+            // 處理前鏡頭鏡像
+            if (useFrontCamera) {
+                bufferCtx.translate(bufferCanvas.width, 0);
+                bufferCtx.scale(-1, 1);
+            }
+            
+            // 同步直接畫，不拖延！保證抓到剛算完的那一幀
+            bufferCtx.drawImage(videoElement, 0, 0, bufferCanvas.width, bufferCanvas.height);
+            
+            // 補上骨架
+            if (landmarks) {
+                drawConnectors(bufferCtx, landmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
+                drawLandmarks(bufferCtx, landmarks, {color: '#FF0000', lineWidth: 2});
+            }
+            
+            bufferCtx.restore();
         }
 
         const pose = new Pose({locateFile: (file) => {
@@ -317,14 +322,14 @@
                         downloadBtn.style.display = "none";
                         screenshotImg.style.display = "none";
                         
-                        captureMaxPointFrame(landmarks); // 呼叫安全截圖函數
+                        captureMaxPointFrame(landmarks); 
 
                     } else if (isKicking) {
                         if (angle > currentMaxAngle) {
                             currentMaxAngle = angle;
                             dropFrameCount = 0; 
                             
-                            captureMaxPointFrame(landmarks); // 呼叫安全截圖函數
+                            captureMaxPointFrame(landmarks); 
                             
                         } else if (angle < currentMaxAngle - END_KICK_DROP) {
                             dropFrameCount++;
@@ -335,21 +340,37 @@
                                 statusTextEl.style.color = "#2ecc71"; 
                                 maxAngleEl.innerText = currentMaxAngle;
                                 
-                                // 🔥 修正 3：徹底改用 Blob 來產生預覽圖與下載連結，防止 FB 粉專崩潰
+                                // 🔥 使用 Blob 取代 DataURL，解決 FB/LINE 內建瀏覽器崩潰問題
                                 bufferCanvas.toBlob((blob) => {
-                                    if(!blob) return;
+                                    if (!blob) return;
                                     const objectUrl = URL.createObjectURL(blob);
                                     
                                     screenshotImg.src = objectUrl;
                                     screenshotImg.style.display = "block";
                                     downloadBtn.style.display = "block"; 
                                     
-                                    // 綁定下載按鈕
-                                    downloadBtn.onclick = () => {
-                                        const link = document.createElement('a');
-                                        link.download = `kick_${maxAngleEl.innerText}deg.jpg`;
-                                        link.href = objectUrl;
-                                        link.click();
+                                    // 綁定下載功能
+                                    downloadBtn.onclick = async () => {
+                                        try {
+                                            const file = new File([blob], `kick_${maxAngleEl.innerText}deg.jpg`, { type: 'image/jpeg' });
+                                            // 優先嘗試系統原生分享 API (支援度佳、可存相簿或傳 LINE)
+                                            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                                                await navigator.share({
+                                                    files: [file],
+                                                    title: '前踢最高點紀錄',
+                                                    text: `最高點角度：${maxAngleEl.innerText} 度！`
+                                                });
+                                            } else {
+                                                // 備案：傳統 a 標籤下載
+                                                const link = document.createElement('a');
+                                                link.download = `kick_${maxAngleEl.innerText}deg.jpg`;
+                                                link.href = objectUrl;
+                                                link.click();
+                                            }
+                                        } catch (e) {
+                                            // 防呆機制：若分享被擋住，提醒直接長按圖片
+                                            alert("請直接【長按】畫面右下角的截圖，選擇「儲存圖片」即可！");
+                                        }
                                     };
                                 }, 'image/jpeg', 0.9);
                                 
@@ -453,7 +474,10 @@
             }
 
             videoElement.srcObject = currentStream;
-            await new Promise((resolve) => { videoElement.onloadedmetadata = () => resolve(); });
+            
+            // 🔥 關鍵修正：確保真正拿到影像資料 (onloadeddata) 而不是只有尺寸
+            await new Promise((resolve) => { videoElement.onloadeddata = () => resolve(); });
+            
             await videoElement.play();
             
             statusTextEl.innerText = `已切換 (${useFrontCamera ? '前鏡頭 / 鏡像' : '後鏡頭 / 正常'})`;
