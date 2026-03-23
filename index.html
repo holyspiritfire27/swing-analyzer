@@ -3,764 +3,509 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Swing Analyzer 48.0 (Mobile)</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <title>前踢動作分析系統 (精準防抖版)</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
     
     <style>
-        body {
+        html, body {
             margin: 0;
             padding: 0;
-            background-color: #000;
-            color: white;
-            font-family: "Microsoft JhengHei", sans-serif;
-            overflow: hidden; /* 禁止捲動 */
+            width: 100%;
+            height: 100%;
+            background-color: black;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden; 
         }
-
-        #container {
-            position: relative;
+        .camera-container {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100vw;
             height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            z-index: 1;
+            transform-origin: center center;
+            transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94); 
         }
-
-        /* 視訊與畫布重疊 */
-        video {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transform: scaleX(-1); /* 鏡像 */
-            display: none; /* 隱藏原始 video，只顯示 canvas */
-        }
-
-        canvas {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            object-fit: contain; /* 保持比例 */
-            transform: scaleX(-1); /* 鏡像 */
-        }
-
-        /* UI 層 (不鏡像) */
-        #ui-layer {
+        video, .output_canvas {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none; /* 讓點擊穿透 */
-            z-index: 10;
+            object-fit: cover; 
         }
-
-        /* 設定面板 */
-        #settings-panel {
+        .ui-layer {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 20, 40, 0.9);
-            padding: 20px;
-            border-radius: 15px;
-            border: 2px solid #00ffff;
-            text-align: center;
-            pointer-events: auto;
-            z-index: 20;
-            width: 80%;
-            max-width: 400px;
-        }
-
-        .btn {
-            background: #00ffff;
-            color: #000;
-            border: none;
-            padding: 10px 20px;
-            font-size: 18px;
-            border-radius: 8px;
-            margin-top: 15px;
-            cursor: pointer;
+            top: 0;
+            left: 0;
             width: 100%;
-            font-weight: bold;
+            height: 100%;
+            z-index: 20;
+            pointer-events: none; 
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
-
-        .radio-group {
-            margin: 10px 0;
-            text-align: left;
-        }
-        
-        .radio-group label {
-            margin-right: 15px;
-            font-size: 16px;
-        }
-
-        input[type="number"] {
-            width: 100px;
-            padding: 5px;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-        }
-
-        /* 狀態顯示 */
-        #status-bar {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            text-shadow: 2px 2px 0 #000;
-            font-size: 18px;
-            font-weight: bold;
-            line-height: 1.5;
-        }
-
-        #bottom-bar {
-            position: absolute;
-            bottom: 20px;
-            left: 10px;
-            right: 10px;
+        .top-panel, .bottom-panel {
+            pointer-events: auto; 
+            background: rgba(0, 0, 0, 0.65);
+            padding: 15px;
             text-align: center;
-            pointer-events: auto;
-        }
-
-        #reset-btn {
-            background: rgba(255, 0, 0, 0.6);
             color: white;
-            border: 2px solid white;
-            padding: 10px 30px;
-            font-size: 16px;
-            border-radius: 20px;
+            width: 100%;
+            box-sizing: border-box;
+            backdrop-filter: blur(8px); 
+            -webkit-backdrop-filter: blur(8px);
         }
-
-        .data-text {
-            color: #Face87; /* Light Blue/Beige */
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 12px 20px;
+            font-size: 16px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        button:active { background-color: #2980b9; transform: translateY(2px); }
+        select {
+            padding: 10px;
+            font-size: 16px;
+            background-color: #2c3e50;
+            color: white;
+            border: 2px solid #3498db;
+            border-radius: 8px;
+            outline: none;
+            max-width: 80%;
+            display: none; 
+        }
+        .zoom-container {
+            margin: 10px auto 0;
+            width: 80%;
+            max-width: 300px;
+            display: none; 
+        }
+        .zoom-container input[type=range] {
+            width: 100%;
+            margin-top: 5px;
+        }
+        #downloadBtn {
+            background-color: #e67e22;
+            display: none;
+            margin: 10px auto 0 auto;
+            width: fit-content;
+        }
+        .status-display {
+            font-size: 18px;
+            color: #2ecc71;
+            font-weight: bold;
+            margin-top: 5px;
+            min-height: 24px;
+        }
+        .angle-info {
             font-size: 24px;
             font-weight: bold;
-            text-shadow: 2px 2px 0px #000;
         }
+        #currentAngle { color: white; }
+        #maxAngle { color: #f1c40f; font-size: 32px; }
+        #screenshotImg {
+            max-width: 40%;
+            max-height: 20vh;
+            border: 2px solid #f1c40f;
+            border-radius: 8px;
+            display: none;
+            position: absolute;
+            bottom: 130px;
+            right: 15px;
+            z-index: 30;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.8);
+            /* 加入確保長按觸控正常運作的屬性 */
+            pointer-events: auto;
+            -webkit-touch-callout: default; 
+        }
+        #debugLog { font-size: 12px; color: #e74c3c; margin-top: 5px; word-wrap: break-word; }
     </style>
 </head>
 <body>
 
-<div id="container">
-    <video id="input_video" playsinline></video>
-    <canvas id="output_canvas"></canvas>
-    
-    <div id="ui-layer">
-        <div id="status-bar">
-            <div id="phase-display" style="color: #ff00ff; font-size: 22px;">初始化中...</div>
-            <div id="speed-display" class="data-text"></div>
-            <div id="angle-display" class="data-text"></div>
-            <div id="level-display" style="color: #00ff00;"></div>
-        </div>
+    <div class="camera-container" id="cameraContainer">
+        <video id="videoElement" playsinline autoplay muted style="display:none;"></video>
+        <canvas class="output_canvas"></canvas>
+        <canvas id="buffer_canvas" style="display:none;"></canvas>
+    </div>
 
-        <div id="bottom-bar" style="display:none;">
-            <button id="reset-btn" onclick="app.resetSystem(true)">重置 (Reset)</button>
+    <div class="ui-layer">
+        <div class="top-panel">
+            <div class="controls">
+                <button id="startBtn">啟動鏡頭</button>
+                <select id="cameraSelect"></select>
+            </div>
+            <div class="zoom-container" id="zoomContainer">
+                <label for="zoomSlider">🔍 調整畫面遠近：</label>
+                <input type="range" id="zoomSlider" min="0.7" max="3" step="0.1" value="1">
+            </div>
+            <div class="status-display" id="statusText">等待啟動...</div>
+            <div id="debugLog"></div>
+        </div>
+        <div class="bottom-panel">
+            <div class="angle-info">目前角度: <span id="currentAngle">0</span>°</div>
+            <div class="angle-info" id="finalAngleText">最高點角度: <span id="maxAngle">0</span>°</div>
+            <button id="downloadBtn">⬇️ 儲存 / 分享截圖</button>
         </div>
     </div>
 
-    <div id="settings-panel">
-        <h2 style="color: #00ffff;">⚾ 揮棒分析 V48 (Mobile)</h2>
+    <img id="screenshotImg" alt="截圖">
+
+    <script>
+        const videoElement = document.getElementById('videoElement');
+        const canvasElement = document.getElementsByClassName('output_canvas')[0];
+        const canvasCtx = canvasElement.getContext('2d');
+        const bufferCanvas = document.getElementById('buffer_canvas');
+        const bufferCtx = bufferCanvas.getContext('2d');
+        const cameraContainer = document.getElementById('cameraContainer');
+
+        const currentAngleEl = document.getElementById('currentAngle');
+        const statusTextEl = document.getElementById('statusText');
+        const maxAngleEl = document.getElementById('maxAngle');
+        const screenshotImg = document.getElementById('screenshotImg');
+        const debugLog = document.getElementById('debugLog');
         
-        <div class="radio-group">
-            <p>受試者身高 (cm):</p>
-            <input type="number" id="input-height" value="175">
-        </div>
+        const startBtn = document.getElementById('startBtn');
+        const cameraSelect = document.getElementById('cameraSelect'); 
+        const downloadBtn = document.getElementById('downloadBtn');
+        const zoomContainer = document.getElementById('zoomContainer');
+        const zoomSlider = document.getElementById('zoomSlider');
 
-        <div class="radio-group">
-            <p>球棒類型:</p>
-            <input type="radio" name="bat" value="1" checked> 棒球棒
-            <input type="radio" name="bat" value="0"> 壘球棒
-        </div>
+        let useFrontCamera = false; 
+        let currentStream = null;
+        let videoDevices = [];
+        let currentDeviceIndex = 0;
+        let currentZoomLevel = 1.0;
 
-        <div class="radio-group">
-            <p>打擊習慣:</p>
-            <input type="radio" name="hand" value="0" checked> 右打 (Righty)
-            <input type="radio" name="hand" value="1"> 左打 (Lefty)
-        </div>
-
-        <button class="btn" onclick="startApp()">開始分析</button>
-    </div>
-</div>
-
-<script>
-// ==============================================================================
-// 🌟 核心邏輯 (JS版 Swing 48.0) 🌟
-// ==============================================================================
-
-class SwingAnalyzer {
-    constructor() {
-        // 狀態常數
-        this.PHASE_BODY_CALIB = "1. 全身入鏡 (保持靜止)";
-        this.PHASE_WAVE_CALIB = "2. 請左右揮動球棒 (鎖定紫色圈)";
-        this.PHASE_READY_POS = "3. 預備動作 (紫色圈已鎖定)";
-        this.PHASE_WAIT_SWING = "4. 請揮擊！ (GO!)";
-        this.PHASE_SWING_DONE = "揮棒結束 (點擊重置)";
-
-        // 參數
-        this.currentPhase = this.PHASE_BODY_CALIB;
-        this.pixelPerMeter = 0.0;
-        this.headSizeRef = 0;
-        this.handCenter = null;
-        this.shoulderPos = null;
-        this.hipY = 0;
-
-        // 關鍵線
-        this.triggerZoneStartX = null;
-        this.triggerZoneEndX = null;
-        this.refLevelY = null;
-
-        // 計時器
-        this.noseHistory = [];
-        this.stableStartTime = 0;
-        this.calibConfidenceTimer = 0;
-        this.readyAccumulatedTime = 0;
-        this.lastReadyCheckTime = 0;
-
-        // 物理數據
-        this.batTipHistory = []; // [x, y, time]
-        this.zonePoints = [];
-        this.hasEnteredZone = false;
-        this.accelerationPhase = false;
-        this.lifetimeMaxMph = 0.0;
-        this.currentSwingSpeedMph = 0.0;
-        this.attackAngle = null;
-        this.currentLevel = "...";
-
-        // 鎖定變數 (Swing 48)
-        this.lockedBatRadius = 0.0;
+        let poseLoaded = false;
+        let isProcessingFrame = false; 
+        let isCameraSwitching = false; 
+        let hasStartedLoop = false;    
+        let lastTime = 0; 
         
-        // 影像處理暫存 (動態偵測用)
-        this.prevFrameData = null; // 儲存上一幀的像素數據
-        this.motionCanvas = document.createElement('canvas'); // 離屏 canvas
-        this.motionCtx = this.motionCanvas.getContext('2d');
-
-        // 設定值
-        this.heightCm = 175.0;
-        this.handedness = 0; // 0:Right, 1:Left
-        this.batType = 1;
-    }
-
-    resetSystem(fullReset) {
-        this.currentSwingSpeedMph = 0.0;
-        this.attackAngle = null;
-        this.currentLevel = "...";
+        // ==== 動作判定核心變數 ====
+        let isKicking = false;
+        let currentMaxAngle = 0;
+        let smoothedAngle = 0;       
+        let dropFrameCount = 0;      
         
-        this.stableStartTime = 0;
-        this.readyAccumulatedTime = 0;
-        this.calibConfidenceTimer = 0;
-        
-        this.handCenter = null;
-        this.batTipHistory = [];
-        this.zonePoints = [];
-        this.hasEnteredZone = false;
-        this.accelerationPhase = false;
-        
-        // 重置動態偵測
-        this.prevFrameData = null;
+        const START_KICK_THRESHOLD = 40; 
+        const END_KICK_DROP = 25;    
+        const STABLE_FRAMES = 3;     
 
-        if (fullReset) {
-            this.currentPhase = this.PHASE_BODY_CALIB;
-            this.pixelPerMeter = 0.0;
-            this.noseHistory = [];
-            this.lockedBatRadius = 0.0;
-            this.lifetimeMaxMph = 0.0;
-        } else {
-            // 回到預備狀態
-            this.currentPhase = this.PHASE_READY_POS;
-        }
-        updateUI();
-    }
-
-    // 線性回歸計算角度 (y = mx + b)
-    calculateAttackAngle(points) {
-        if (points.length < 3) return null;
-
-        let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-        let n = points.length;
-
-        for (let p of points) {
-            sumX += p.x;
-            sumY += p.y;
-            sumXY += p.x * p.y;
-            sumXX += p.x * p.x;
+        function calculateAngle(hip1, ankle1, hip2, ankle2, canvasW, canvasH) {
+            const dx1 = (ankle1.x - hip1.x) * canvasW;
+            const dy1 = (ankle1.y - hip1.y) * canvasH;
+            const dx2 = (ankle2.x - hip2.x) * canvasW;
+            const dy2 = (ankle2.y - hip2.y) * canvasH;
+            
+            const dotProduct = dx1 * dx2 + dy1 * dy2;
+            const mag1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+            const mag2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+            
+            if (mag1 === 0 || mag2 === 0) return 0;
+            return Math.acos(dotProduct / (mag1 * mag2)) * (180 / Math.PI);
         }
 
-        let slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-        if (!isFinite(slope)) return null;
+        const pose = new Pose({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+        }});
+        pose.setOptions({
+            modelComplexity: 1, 
+            smoothLandmarks: true,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
 
-        // 計算角度 (與 Python 邏輯一致)
-        // Canvas Y 向下為正。
-        let angle = Math.atan(slope) * (180 / Math.PI);
+        pose.onResults(onResults);
+        pose.initialize().then(() => {
+            poseLoaded = true;
+            if(statusTextEl.innerText === "等待啟動...") {
+                statusTextEl.innerText = "模型就緒，請點擊啟動";
+            }
+        });
 
-        if (this.handedness === 0) { // Righty (Swing Right)
-            angle = -angle;
-        } else { // Lefty (Swing Left)
-            angle = angle;
-        }
-        return angle;
-    }
+        function onResults(results) {
+            if (isCameraSwitching) return;
 
-    speedToMph(pxPerSec) {
-        if (this.pixelPerMeter === 0) return 0.0;
-        return (pxPerSec / this.pixelPerMeter) * 2.23694;
-    }
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+            bufferCanvas.width = videoElement.videoWidth;
+            bufferCanvas.height = videoElement.videoHeight;
+            
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            
+            if (useFrontCamera) {
+                canvasCtx.translate(canvasElement.width, 0);
+                canvasCtx.scale(-1, 1);
+            }
+            
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
-    getLevel(mph) {
-        if (mph < 20) return "...";
-        if (mph < 55) return "等級: 青少棒";
-        if (mph <= 68) return "等級: 大學";
-        if (mph <= 78) return "等級: 職棒";
-        return "等級: 全明星 🌟";
-    }
-}
+            if (results.poseLandmarks) {
+                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
+                drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#FF0000', lineWidth: 2});
 
-const app = new SwingAnalyzer();
-const videoElement = document.getElementById('input_video');
-const canvasElement = document.getElementById('output_canvas');
-const canvasCtx = canvasElement.getContext('2d');
+                const landmarks = results.poseLandmarks;
+                const leftHip = landmarks[23];
+                const rightHip = landmarks[24];
+                const leftAnkle = landmarks[27];
+                const rightAnkle = landmarks[28];
 
-// 初始化 Pose
-const pose = new Pose({locateFile: (file) => {
-    return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
-}});
-
-pose.setOptions({
-    modelComplexity: 1,
-    smoothLandmarks: true,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5
-});
-
-pose.onResults(onResults);
-
-// 啟動相機
-const camera = new Camera(videoElement, {
-    onFrame: async () => {
-        await pose.send({image: videoElement});
-    },
-    width: 1280,
-    height: 720
-});
-
-function startApp() {
-    // 讀取設定
-    app.heightCm = parseFloat(document.getElementById('input-height').value);
-    const batRadios = document.getElementsByName('bat');
-    for (let r of batRadios) if (r.checked) app.batType = parseInt(r.value);
-    const handRadios = document.getElementsByName('hand');
-    for (let r of handRadios) if (r.checked) app.handedness = parseInt(r.value);
-
-    document.getElementById('settings-panel').style.display = 'none';
-    document.getElementById('bottom-bar').style.display = 'block';
-    
-    camera.start();
-    updateUI();
-}
-
-function updateUI() {
-    document.getElementById('phase-display').innerText = app.currentPhase;
-    document.getElementById('speed-display').innerText = 
-        `速度: ${app.currentSwingSpeedMph.toFixed(1)} mph (最佳: ${app.lifetimeMaxMph.toFixed(1)})`;
-    
-    let angStr = app.attackAngle !== null ? app.attackAngle.toFixed(1) : "--";
-    document.getElementById('angle-display').innerText = `攻擊角度: ${angStr} 度`;
-    document.getElementById('level-display').innerText = app.currentLevel;
-}
-
-// 核心處理迴圈
-function onResults(results) {
-    // 設定畫布尺寸
-    canvasElement.width = videoElement.videoWidth;
-    canvasElement.height = videoElement.videoHeight;
-    const w = canvasElement.width;
-    const h = canvasElement.height;
-
-    // 繪製背景 (影像)
-    canvasCtx.save();
-    canvasCtx.clearRect(0, 0, w, h);
-    canvasCtx.drawImage(results.image, 0, 0, w, h);
-
-    // 繪製骨架
-    if (results.poseLandmarks) {
-        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
-        drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#FF0000', lineWidth: 1, radius: 3});
-    }
-
-    const lm = results.poseLandmarks;
-    if (!lm) {
-        canvasCtx.restore();
-        return;
-    }
-
-    // 取得關鍵點座標
-    const noseY = lm[0].y * h;
-    const noseX = lm[0].x * w;
-    
-    // 雙手中心
-    const wx = (lm[15].x + lm[16].x) / 2 * w;
-    const wy = (lm[15].y + lm[16].y) / 2 * h;
-    app.handCenter = {x: wx, y: wy};
-
-    // 腰部高度
-    app.hipY = (lm[23].y + lm[24].y) / 2 * h;
-
-    // 後肩 (鏡像：左側畫面是右側身體)
-    // Righty (0): 背對鏡頭，後肩是右肩(12)
-    // Lefty (1): 後肩是左肩(11)
-    const shIdx = app.handedness === 0 ? 12 : 11; 
-    app.shoulderPos = {x: lm[shIdx].x * w, y: lm[shIdx].y * h};
-
-    // 設定參考線 (PPM 校準後)
-    if (app.pixelPerMeter > 0) {
-        const offsetPx = app.pixelPerMeter * 0.20;
-        // Righty(0): Front foot is Left(27) in real life -> Left foot on screen (27)
-        // 注意：MediaPipe 不會自動鏡像座標數據，但我們顯示時有 scaleX(-1)。
-        // 邏輯運算使用原始座標。
-        const frontFootIdx = app.handedness === 0 ? 27 : 28;
-        const frontFootX = lm[frontFootIdx].x * w;
-
-        if (app.handedness === 0) { // Righty (Swing Left -> Right in real world / Right -> Left in mirrored view?)
-            // 簡化：Righty 在畫面左邊，往右打。前腳在右側。
-            // 為了避免混淆，我們依賴實際座標變化
-            app.triggerZoneStartX = frontFootX - offsetPx;
-            app.triggerZoneEndX = frontFootX + offsetPx;
-        } else {
-            app.triggerZoneStartX = frontFootX + offsetPx;
-            app.triggerZoneEndX = frontFootX - offsetPx;
-        }
-        
-        // 畫出參考線
-        canvasCtx.strokeStyle = "rgba(255, 0, 255, 0.5)";
-        canvasCtx.lineWidth = 2;
-        canvasCtx.beginPath();
-        canvasCtx.moveTo(app.triggerZoneStartX, 0);
-        canvasCtx.lineTo(app.triggerZoneStartX, h);
-        canvasCtx.moveTo(app.triggerZoneEndX, 0);
-        canvasCtx.lineTo(app.triggerZoneEndX, h);
-        canvasCtx.stroke();
-    }
-
-    // === 狀態機邏輯 ===
-    const currentTime = Date.now() / 1000;
-
-    // --- Phase 1: 身體校準 ---
-    if (app.currentPhase === app.PHASE_BODY_CALIB) {
-        const leftAnkleY = lm[27].y * h;
-        const rightAnkleY = lm[28].y * h;
-        
-        if (noseY > 0 && noseY < h && leftAnkleY < h) {
-            let pixelHeight = ((leftAnkleY + rightAnkleY) / 2) - noseY;
-            if (pixelHeight > h * 0.4) {
-                app.noseHistory.push(lm[0].x);
-                if (app.noseHistory.length > 20) app.noseHistory.shift();
-
-                let isStable = false;
-                if (app.noseHistory.length >= 20) {
-                    let min = Math.min(...app.noseHistory);
-                    let max = Math.max(...app.noseHistory);
-                    if (max - min < 0.01) isStable = true;
-                }
-
-                if (isStable) {
-                    if (app.stableStartTime === 0) app.stableStartTime = currentTime;
-                    let elapsed = currentTime - app.stableStartTime;
+                if (leftHip.visibility > 0.2 && rightHip.visibility > 0.2 && 
+                    leftAnkle.visibility > 0.2 && rightAnkle.visibility > 0.2) {
                     
-                    canvasCtx.fillStyle = "#00FF00";
-                    canvasCtx.font = "40px Arial";
-                    canvasCtx.fillText((1.0 - elapsed).toFixed(1), 50, 100);
+                    let rawAngle = calculateAngle(
+                        leftHip, leftAnkle, rightHip, rightAnkle, 
+                        canvasElement.width, canvasElement.height
+                    );
 
-                    if (elapsed >= 1.0) {
-                        let realHeightM = app.heightCm / 100.0;
-                        app.pixelPerMeter = pixelHeight / (realHeightM * 0.9);
-                        app.currentPhase = app.PHASE_WAVE_CALIB;
-                        app.stableStartTime = 0;
-                        app.calibConfidenceTimer = 0;
-                        updateUI();
+                    if (smoothedAngle === 0) {
+                        smoothedAngle = rawAngle; 
+                    } else {
+                        smoothedAngle = (rawAngle * 0.6) + (smoothedAngle * 0.4); 
                     }
-                } else {
-                    app.stableStartTime = 0;
-                }
-            }
-        }
-    }
+                    
+                    let angle = Math.round(smoothedAngle);
+                    currentAngleEl.innerText = angle;
+                    currentAngleEl.style.color = "white";
 
-    // --- Phase 2: 動態校準 (揮動尋找最遠點) ---
-    else if (app.currentPhase === app.PHASE_WAVE_CALIB) {
-        drawTextCenter(canvasCtx, "請左右揮動球棒，鎖定紫色圈", h/2, "#FF00FF");
-        
-        // 處理動態偵測 (每幀處理)
-        let candidate = processMotion(canvasElement, app.handCenter, app.pixelPerMeter);
-        
-        if (candidate) {
-            // 畫出紫色圈
-            canvasCtx.beginPath();
-            canvasCtx.arc(candidate.x, candidate.y, 20, 0, 2 * Math.PI);
-            canvasCtx.strokeStyle = "#FF00FF";
-            canvasCtx.lineWidth = 4;
-            canvasCtx.stroke();
+                    if (!isKicking && angle > START_KICK_THRESHOLD) {
+                        isKicking = true;
+                        currentMaxAngle = angle;
+                        dropFrameCount = 0; 
+                        
+                        statusTextEl.innerText = "💥 偵測到踢擊，記錄中...";
+                        statusTextEl.style.color = "#e74c3c"; 
+                        downloadBtn.style.display = "none";
+                        screenshotImg.style.display = "none";
+                        
+                        bufferCtx.clearRect(0, 0, bufferCanvas.width, bufferCanvas.height);
+                        bufferCtx.drawImage(canvasElement, 0, 0);
 
-            // 信心計時
-            if (app.calibConfidenceTimer === 0) app.calibConfidenceTimer = currentTime;
-            let elapsed = currentTime - app.calibConfidenceTimer;
+                    } else if (isKicking) {
+                        if (angle > currentMaxAngle) {
+                            currentMaxAngle = angle;
+                            dropFrameCount = 0; 
+                            
+                            bufferCtx.clearRect(0, 0, bufferCanvas.width, bufferCanvas.height);
+                            bufferCtx.drawImage(canvasElement, 0, 0);
+                            
+                        } else if (angle < currentMaxAngle - END_KICK_DROP) {
+                            dropFrameCount++;
 
-            // 進度條
-            let barW = 200;
-            let filled = Math.min(1, elapsed / 1.5) * barW;
-            canvasCtx.fillStyle = "white";
-            canvasCtx.fillRect(w/2 - 100, h - 100, barW, 20);
-            canvasCtx.fillStyle = "#FF00FF";
-            canvasCtx.fillRect(w/2 - 100, h - 100, filled, 20);
-
-            if (elapsed >= 1.5) {
-                // 鎖定半徑
-                let dist = Math.hypot(candidate.x - app.handCenter.x, candidate.y - app.handCenter.y);
-                app.lockedBatRadius = dist;
-                app.currentPhase = app.PHASE_READY_POS;
-                app.stableStartTime = 0;
-                updateUI();
-            }
-        } else {
-            app.calibConfidenceTimer = 0;
-        }
-    }
-
-    // --- Phase 3: 預備動作 (Sticky Lock) ---
-    else if (app.currentPhase === app.PHASE_READY_POS) {
-        // 顯示鎖定半徑
-        if (app.lockedBatRadius > 0) {
-            canvasCtx.beginPath();
-            canvasCtx.arc(app.handCenter.x, app.handCenter.y, app.lockedBatRadius, 0, 2 * Math.PI);
-            canvasCtx.strokeStyle = "rgba(255, 0, 255, 0.5)";
-            canvasCtx.lineWidth = 2;
-            canvasCtx.stroke();
-
-            // 估計棒頭位置 (假設豎起)
-            let tipEstY = app.handCenter.y - app.lockedBatRadius;
-            canvasCtx.beginPath();
-            canvasCtx.arc(app.handCenter.x, tipEstY, 15, 0, 2 * Math.PI);
-            canvasCtx.fillStyle = "#FF00FF";
-            canvasCtx.fill();
-        }
-
-        // 檢查手是否靠肩
-        let distReady = Math.hypot(app.handCenter.x - app.shoulderPos.x, app.handCenter.y - app.shoulderPos.y);
-        let threshDist = app.pixelPerMeter * 0.4;
-
-        if (distReady < threshDist) {
-            canvasCtx.beginPath();
-            canvasCtx.arc(app.shoulderPos.x, app.shoulderPos.y, 30, 0, 2 * Math.PI);
-            canvasCtx.strokeStyle = "#00FF00";
-            canvasCtx.lineWidth = 3;
-            canvasCtx.stroke();
-
-            if (app.stableStartTime === 0) app.stableStartTime = currentTime;
-            let elapsed = currentTime - app.stableStartTime;
-            drawTextCenter(canvasCtx, `Ready... ${elapsed.toFixed(1)}`, h/2 - 50, "#00FF00");
-
-            if (elapsed >= 1.0) {
-                app.currentPhase = app.PHASE_WAIT_SWING;
-                app.batTipHistory = [];
-                app.zonePoints = [];
-                app.hasEnteredZone = false;
-                app.accelerationPhase = false;
-                // 重置 Motion Buffer 以確保乾淨
-                app.prevFrameData = null; 
-                updateUI();
-            }
-        } else {
-            app.stableStartTime = 0;
-            drawTextCenter(canvasCtx, "請將雙手靠近後肩", h/2, "#F0E68C");
-        }
-    }
-
-    // --- Phase 4: 揮擊偵測 (Tether v2) ---
-    else if (app.currentPhase === app.PHASE_WAIT_SWING) {
-        drawTextCenter(canvasCtx, "GO!", h/2, "#00FF00");
-
-        // 使用特定的揮棒追蹤邏輯
-        let tip = processSwingTracking(canvasElement, app.handCenter, app.pixelPerMeter, app.lockedBatRadius, app.hipY);
-
-        if (tip) {
-            canvasCtx.beginPath();
-            canvasCtx.arc(tip.x, tip.y, 10, 0, 2 * Math.PI);
-            canvasCtx.fillStyle = "#FF00FF";
-            canvasCtx.fill();
-
-            app.batTipHistory.push({x: tip.x, y: tip.y, t: currentTime});
-            if (app.batTipHistory.length > 20) app.batTipHistory.shift();
-
-            if (app.batTipHistory.length >= 2) {
-                let curr = app.batTipHistory[app.batTipHistory.length - 1];
-                let prev = app.batTipHistory[app.batTipHistory.length - 2];
-
-                // 區間檢查
-                let x = curr.x;
-                let minX = Math.min(app.triggerZoneStartX, app.triggerZoneEndX);
-                let maxX = Math.max(app.triggerZoneStartX, app.triggerZoneEndX);
-                let inZone = (x >= minX && x <= maxX);
-
-                if (inZone) {
-                    app.hasEnteredZone = true;
-                    app.zonePoints.push(curr);
-
-                    let dx = curr.x - prev.x;
-                    let dy = curr.y - prev.y;
-                    let dt = curr.t - prev.t;
-
-                    // 方向檢查
-                    let validDir = false;
-                    if (app.handedness === 0 && dx < 0) validDir = true; // Righty moves Left
-                    if (app.handedness === 1 && dx > 0) validDir = true; // Lefty moves Right
-
-                    if (dt > 0 && validDir) {
-                        let distPx = Math.hypot(dx, dy);
-                        let speedPxS = distPx / dt;
-                        let currMph = app.speedToMph(speedPxS, app.pixelPerMeter);
-
-                        if (currMph > app.currentSwingSpeedMph && currMph < 200) {
-                            app.currentSwingSpeedMph = currMph;
-                            app.currentLevel = app.getLevel(currMph);
-                            if (app.currentSwingSpeedMph > app.lifetimeMaxMph) {
-                                app.lifetimeMaxMph = app.currentSwingSpeedMph;
+                            if (dropFrameCount >= STABLE_FRAMES) {
+                                isKicking = false;
+                                statusTextEl.innerText = "✅ 完成！可進行下一次";
+                                statusTextEl.style.color = "#2ecc71"; 
+                                
+                                maxAngleEl.innerText = currentMaxAngle;
+                                screenshotImg.src = bufferCanvas.toDataURL('image/jpeg', 0.9);
+                                screenshotImg.style.display = "block";
+                                downloadBtn.style.display = "block"; 
+                                
+                                currentMaxAngle = 0;
+                                dropFrameCount = 0;
+                                smoothedAngle = 0;
                             }
-                            updateUI();
+                        } else {
+                            dropFrameCount = 0;
                         }
                     }
-                }
-
-                // 結束判定
-                let isPast = false;
-                if (app.hasEnteredZone && app.zonePoints.length > 3) {
-                    if (app.handedness === 0 && curr.x < minX) isPast = true;
-                    if (app.handedness === 1 && curr.x > maxX) isPast = true;
-                }
-
-                if (isPast) {
-                    let angle = app.calculateAttackAngle(app.zonePoints);
-                    if (angle !== null) {
-                        app.attackAngle = angle;
-                        updateUI();
-                    }
-                    app.currentPhase = app.PHASE_SWING_DONE;
-                    updateUI();
+                } else {
+                    currentAngleEl.style.color = "#95a5a6";
                 }
             }
+            canvasCtx.restore();
         }
-    }
 
-    // --- Phase 5: 結束 ---
-    else if (app.currentPhase === app.PHASE_SWING_DONE) {
-        drawTextCenter(canvasCtx, "揮棒結束 - 回預備姿勢歸零", h/2, "#FFA500");
-        
-        // Auto Reset Logic
-        let dist = Math.hypot(app.handCenter.x - app.shoulderPos.x, app.handCenter.y - app.shoulderPos.y);
-        if (dist < app.pixelPerMeter * 0.4) {
-            drawTextCenter(canvasCtx, "Resetting...", h/2 + 50, "#00FFFF");
-            app.resetSystem(false);
+        function stopMediaTracks(stream) {
+            if (stream) stream.getTracks().forEach(track => track.stop());
         }
-    }
 
-    canvasCtx.restore();
-}
+        function populateCameraList() {
+            cameraSelect.innerHTML = "";
+            videoDevices.forEach((device, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.text = device.label || `未命名鏡頭 ${index + 1}`;
+                cameraSelect.appendChild(option);
+            });
+            cameraSelect.value = currentDeviceIndex;
+            cameraSelect.style.display = "inline-block"; 
+        }
 
-// 輔助繪圖
-function drawTextCenter(ctx, text, y, color) {
-    ctx.fillStyle = color;
-    ctx.font = "bold 30px Arial";
-    ctx.textAlign = "center";
-    ctx.strokeStyle = "black";
-    ctx.lineWidth = 3;
-    ctx.strokeText(text, ctx.canvas.width/2, y);
-    ctx.fillText(text, ctx.canvas.width/2, y);
-}
+        async function getCameras() {
+            try {
+                if (videoDevices.length === 0) {
+                    const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    stopMediaTracks(tempStream);
+                }
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                videoDevices = devices.filter(d => d.kind === 'videoinput');
+                
+                const preferred = videoDevices.findIndex(d => {
+                    const label = d.label.toLowerCase();
+                    return (label.includes('back') || label.includes('rear') || label.includes('environment')) &&
+                           !label.includes('tele') && !label.includes('zoom') && 
+                           !label.includes('ir ') && !label.includes('depth');
+                });
+                currentDeviceIndex = preferred !== -1 ? preferred : 0;
+                populateCameraList();
+            } catch (err) {
+                console.error("獲取鏡頭列表失敗:", err);
+            }
+        }
 
-// ==============================================================================
-// ⚡ 高效能動態偵測 (Web Canvas 版) ⚡
-// ==============================================================================
+        async function startCamera() {
+            if (!poseLoaded) { alert("AI 模型尚未準備好，請稍等。"); return; }
+            if (isCameraSwitching) return; 
 
-function processMotion(sourceCanvas, hand, ppm) {
-    if (!app.prevFrameData || !hand) {
-        // 保存第一幀
-        app.motionCanvas.width = 320; // 降解析度處理以提升手機效能
-        app.motionCanvas.height = 180;
-        app.motionCtx.drawImage(sourceCanvas, 0, 0, 320, 180);
-        app.prevFrameData = app.motionCtx.getImageData(0, 0, 320, 180);
-        return null;
-    }
+            isCameraSwitching = true; 
+            statusTextEl.innerText = "切換鏡頭中...";
+            statusTextEl.style.color = "#f1c40f";
 
-    // 取得當前幀
-    app.motionCtx.drawImage(sourceCanvas, 0, 0, 320, 180);
-    const currData = app.motionCtx.getImageData(0, 0, 320, 180);
-    const prev = app.prevFrameData.data;
-    const curr = currData.data;
-    
-    // 更新上一幀
-    app.prevFrameData = currData;
-
-    // 縮放比例
-    const scaleX = sourceCanvas.width / 320;
-    const scaleY = sourceCanvas.height / 180;
-    
-    // 手部在縮圖中的位置
-    const hx = hand.x / scaleX;
-    const hy = hand.y / scaleY;
-    
-    // 搜尋參數 (縮圖座標)
-    const minR = (ppm * 0.5) / scaleX;
-    const maxR = (ppm * 1.3) / scaleX;
-    
-    let maxDist = 0;
-    let bestPoint = null;
-
-    // 像素比對 loop (Step 4 for speed)
-    for (let y = 0; y < 180; y += 2) {
-        for (let x = 0; x < 320; x += 2) {
-            const i = (y * 320 + x) * 4;
+            while (isProcessingFrame) {
+                await new Promise(r => setTimeout(r, 10));
+            }
             
-            // 簡單的 RGB 差異計算
-            const diff = Math.abs(curr[i] - prev[i]) + 
-                         Math.abs(curr[i+1] - prev[i+1]) + 
-                         Math.abs(curr[i+2] - prev[i+2]);
+            if (currentStream) {
+                stopMediaTracks(currentStream);
+                videoElement.pause();
+                videoElement.srcObject = null; 
+                videoElement.load(); 
+                canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+                bufferCtx.clearRect(0, 0, bufferCanvas.width, bufferCanvas.height);
+            }
 
-            // 閾值判定 (Motion Threshold)
-            if (diff > 100) {
-                // 距離過濾
-                const dist = Math.hypot(x - hx, y - hy);
-                if (dist > minR && dist < maxR) {
-                    if (dist > maxDist) {
-                        maxDist = dist;
-                        bestPoint = {x: x * scaleX, y: y * scaleY};
-                    }
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            const device = videoDevices[currentDeviceIndex];
+            const deviceId = device ? { exact: device.deviceId } : undefined;
+            if (device) {
+                const label = device.label.toLowerCase();
+                useFrontCamera = label.includes('front') || label.includes('user') || label.includes('selfie');
+            }
+
+            let constraints = { video: { deviceId: deviceId, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false };
+
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (err) {
+                constraints.video.width = { ideal: 640 };
+                constraints.video.height = { ideal: 480 };
+                try {
+                    currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                } catch (fallbackErr) {
+                    isCameraSwitching = false;
+                    statusTextEl.innerText = "啟動失敗，請重試";
+                    return;
                 }
             }
-        }
-    }
-    return bestPoint;
-}
 
-function processSwingTracking(sourceCanvas, hand, ppm, lockRadius, hipY) {
-    // 類似 processMotion 但加上 Sticky Lock 範圍限制
-    // 這裡我們簡化重用 processMotion 的核心邏輯，但加上半徑濾波
-    
-    // ... (在實際 WebGL 環境可以用 Shader 加速，但在這裡用 CPU 簡化版)
-    // 為了保持程式碼簡潔，這裡使用同樣的差分邏輯，但加上特定的半徑權重
-    
-    let candidate = processMotion(sourceCanvas, hand, ppm);
-    
-    if (candidate) {
-        // 額外檢查：必須接近鎖定半徑 (Sticky Constraint)
-        let dist = Math.hypot(candidate.x - hand.x, candidate.y - hand.y);
-        let diffR = Math.abs(dist - lockRadius);
-        
-        // 容許誤差 20cm
-        if (diffR < ppm * 0.2) {
-            return candidate;
-        }
-    }
-    return null;
-}
+            videoElement.srcObject = currentStream;
+            await new Promise((resolve) => { videoElement.onloadedmetadata = () => resolve(); });
+            await videoElement.play();
+            
+            statusTextEl.innerText = `已切換 (${useFrontCamera ? '前鏡頭 / 鏡像' : '後鏡頭 / 正常'})`;
+            statusTextEl.style.color = "#2ecc71";
+            startBtn.style.display = "none"; 
+            zoomContainer.style.display = "block"; 
+            
+            isCameraSwitching = false; 
 
-</script>
+            if (!hasStartedLoop) {
+                hasStartedLoop = true;
+                requestAnimationFrame(processFrame);
+            }
+        }
+
+        async function processFrame(timestamp) {
+            if (timestamp - lastTime < 33) {
+                requestAnimationFrame(processFrame);
+                return;
+            }
+            lastTime = timestamp;
+
+            if (!videoElement.paused && !videoElement.ended && !isProcessingFrame && !isCameraSwitching && videoElement.videoWidth > 0) {
+                isProcessingFrame = true;
+                try {
+                    await pose.send({image: videoElement});
+                } catch (e) {
+                    console.error("AI 異常:", e);
+                }
+                isProcessingFrame = false; 
+            }
+            requestAnimationFrame(processFrame);
+        }
+
+        startBtn.addEventListener('click', async () => {
+            startBtn.disabled = true;
+            await getCameras();
+            await startCamera();
+        });
+
+        cameraSelect.addEventListener('change', async (e) => {
+            if (isCameraSwitching) return;
+            currentDeviceIndex = parseInt(e.target.value);
+            await startCamera();
+        });
+
+        zoomSlider.addEventListener('input', (e) => {
+            currentZoomLevel = parseFloat(e.target.value);
+            cameraContainer.style.transform = `scale(${currentZoomLevel})`;
+        });
+
+        // 🔥 終極版下載按鈕邏輯：使用原生分享 / 儲存 API
+        downloadBtn.addEventListener('click', async () => {
+            const dataUrl = screenshotImg.src;
+            const fileName = `kick_${maxAngleEl.innerText}deg.jpg`;
+
+            try {
+                // 將圖片編碼轉回實體檔案 (Blob)
+                const res = await fetch(dataUrl);
+                const blob = await res.blob();
+                const file = new File([blob], fileName, { type: 'image/jpeg' });
+
+                // 檢查瀏覽器是否支援 Web Share API (通常 iOS Safari / Android Chrome 都支援)
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        files: [file],
+                        title: '前踢最高點紀錄',
+                        text: `這是我的前踢紀錄，最高點角度：${maxAngleEl.innerText} 度！`
+                    });
+                } else {
+                    // 若不支援（例如部分 FB 內部瀏覽器），改回傳統下載並給予提示
+                    const link = document.createElement('a');
+                    link.download = fileName;
+                    link.href = dataUrl;
+                    link.click();
+                    alert("若沒有自動下載，請直接【長按】畫面右下角的截圖，選擇「儲存圖片」即可！");
+                }
+            } catch (error) {
+                console.error("分享/下載失敗:", error);
+                // 終極防呆：請使用者直接壓圖片
+                alert("請直接【長按】畫面右下角的截圖，選擇「儲存圖片」即可！");
+            }
+        });
+
+    </script>
 </body>
 </html>
