@@ -130,9 +130,6 @@
             right: 15px;
             z-index: 30;
             box-shadow: 0 4px 10px rgba(0,0,0,0.8);
-            /* 加入確保長按觸控正常運作的屬性 */
-            pointer-events: auto;
-            -webkit-touch-callout: default; 
         }
         #debugLog { font-size: 12px; color: #e74c3c; margin-top: 5px; word-wrap: break-word; }
     </style>
@@ -161,7 +158,7 @@
         <div class="bottom-panel">
             <div class="angle-info">目前角度: <span id="currentAngle">0</span>°</div>
             <div class="angle-info" id="finalAngleText">最高點角度: <span id="maxAngle">0</span>°</div>
-            <button id="downloadBtn">⬇️ 儲存 / 分享截圖</button>
+            <button id="downloadBtn">⬇️ 下載截圖</button>
         </div>
     </div>
 
@@ -199,15 +196,15 @@
         let hasStartedLoop = false;    
         let lastTime = 0; 
         
-        // ==== 動作判定核心變數 ====
+        // ==== 🔥 動作判定核心變數 (升級版) ====
         let isKicking = false;
         let currentMaxAngle = 0;
-        let smoothedAngle = 0;       
-        let dropFrameCount = 0;      
+        let smoothedAngle = 0;       // 儲存平滑化後的角度
+        let dropFrameCount = 0;      // 紀錄連續下降的幀數
         
         const START_KICK_THRESHOLD = 40; 
-        const END_KICK_DROP = 25;    
-        const STABLE_FRAMES = 3;     
+        const END_KICK_DROP = 25;    // 🚀 從 15 放寬到 25，防止提早結束
+        const STABLE_FRAMES = 3;     // 🚀 必須連續掉落 3 幀才算結束
 
         function calculateAngle(hip1, ankle1, hip2, ankle2, canvasW, canvasH) {
             const dx1 = (ankle1.x - hip1.x) * canvasW;
@@ -277,9 +274,11 @@
                         canvasElement.width, canvasElement.height
                     );
 
+                    // 🚀 關鍵修正 1：角度平滑化 (EMA)
                     if (smoothedAngle === 0) {
-                        smoothedAngle = rawAngle; 
+                        smoothedAngle = rawAngle; // 初始化
                     } else {
+                        // 新角度佔 60%，歷史平滑佔 40%，有效過濾瞬間抖動
                         smoothedAngle = (rawAngle * 0.6) + (smoothedAngle * 0.4); 
                     }
                     
@@ -287,7 +286,9 @@
                     currentAngleEl.innerText = angle;
                     currentAngleEl.style.color = "white";
 
+                    // ==== 動作狀態機 ====
                     if (!isKicking && angle > START_KICK_THRESHOLD) {
+                        // 啟動踢擊
                         isKicking = true;
                         currentMaxAngle = angle;
                         dropFrameCount = 0; 
@@ -301,16 +302,20 @@
                         bufferCtx.drawImage(canvasElement, 0, 0);
 
                     } else if (isKicking) {
+                        // 🚀 關鍵修正 2 & 3：最高點刷新與容忍下降緩衝區
                         if (angle > currentMaxAngle) {
+                            // 破紀錄，更新最高點與截圖
                             currentMaxAngle = angle;
-                            dropFrameCount = 0; 
+                            dropFrameCount = 0; // 清除下降計數
                             
                             bufferCtx.clearRect(0, 0, bufferCanvas.width, bufferCanvas.height);
                             bufferCtx.drawImage(canvasElement, 0, 0);
                             
                         } else if (angle < currentMaxAngle - END_KICK_DROP) {
+                            // 角度低於門檻，開始計算下降幀數
                             dropFrameCount++;
 
+                            // 必須連續掉落超過 STABLE_FRAMES 才算真正結束
                             if (dropFrameCount >= STABLE_FRAMES) {
                                 isKicking = false;
                                 statusTextEl.innerText = "✅ 完成！可進行下一次";
@@ -321,11 +326,14 @@
                                 screenshotImg.style.display = "block";
                                 downloadBtn.style.display = "block"; 
                                 
+                                // 重置狀態準備抓下一次
                                 currentMaxAngle = 0;
                                 dropFrameCount = 0;
                                 smoothedAngle = 0;
                             }
                         } else {
+                            // 角度微微下降，但還沒低於 END_KICK_DROP 門檻
+                            // 視為還在最高點附近震盪，歸零下降計數
                             dropFrameCount = 0;
                         }
                     }
@@ -473,39 +481,12 @@
             cameraContainer.style.transform = `scale(${currentZoomLevel})`;
         });
 
-        // 🔥 終極版下載按鈕邏輯：使用原生分享 / 儲存 API
-        downloadBtn.addEventListener('click', async () => {
-            const dataUrl = screenshotImg.src;
-            const fileName = `kick_${maxAngleEl.innerText}deg.jpg`;
-
-            try {
-                // 將圖片編碼轉回實體檔案 (Blob)
-                const res = await fetch(dataUrl);
-                const blob = await res.blob();
-                const file = new File([blob], fileName, { type: 'image/jpeg' });
-
-                // 檢查瀏覽器是否支援 Web Share API (通常 iOS Safari / Android Chrome 都支援)
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    await navigator.share({
-                        files: [file],
-                        title: '前踢最高點紀錄',
-                        text: `這是我的前踢紀錄，最高點角度：${maxAngleEl.innerText} 度！`
-                    });
-                } else {
-                    // 若不支援（例如部分 FB 內部瀏覽器），改回傳統下載並給予提示
-                    const link = document.createElement('a');
-                    link.download = fileName;
-                    link.href = dataUrl;
-                    link.click();
-                    alert("若沒有自動下載，請直接【長按】畫面右下角的截圖，選擇「儲存圖片」即可！");
-                }
-            } catch (error) {
-                console.error("分享/下載失敗:", error);
-                // 終極防呆：請使用者直接壓圖片
-                alert("請直接【長按】畫面右下角的截圖，選擇「儲存圖片」即可！");
-            }
+        downloadBtn.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = `kick_${maxAngleEl.innerText}deg.jpg`;
+            link.href = screenshotImg.src;
+            link.click();
         });
-
     </script>
 </body>
 </html>
