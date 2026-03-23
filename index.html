@@ -27,7 +27,8 @@
             transform-origin: center center;
             transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94); 
         }
-        video, .output_canvas {
+        /* 讓畫布填滿螢幕 */
+        .output_canvas {
             position: absolute;
             top: 0;
             left: 0;
@@ -139,7 +140,7 @@
 <body>
 
     <div class="camera-container" id="cameraContainer">
-        <video id="videoElement" playsinline autoplay muted style="opacity:0; position:absolute; z-index:-1;"></video>
+        <video id="videoElement" playsinline autoplay muted style="position:absolute; width:1px; height:1px; left:-9999px;"></video>
         <canvas class="output_canvas"></canvas>
         <canvas id="buffer_canvas" style="display:none;"></canvas>
     </div>
@@ -221,11 +222,14 @@
             return Math.acos(dotProduct / (mag1 * mag2)) * (180 / Math.PI);
         }
 
-        // 🔥 終極截圖函數 (移除 requestAnimationFrame，加入 readyState 與尺寸雙重防護)
+        // 🔥 終極截圖函數
         function captureMaxPointFrame(landmarks) {
             // 確保影像已載入且有尺寸
             if (videoElement.readyState < 2) return; 
             if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) return;
+
+            // 🔥 Debug 驗證：顯示當前抓到的影像真實解析度
+            debugLog.innerText = `截圖來源解析度: ${videoElement.videoWidth}x${videoElement.videoHeight}`;
 
             bufferCtx.save();
             bufferCtx.clearRect(0, 0, bufferCanvas.width, bufferCanvas.height);
@@ -340,7 +344,7 @@
                                 statusTextEl.style.color = "#2ecc71"; 
                                 maxAngleEl.innerText = currentMaxAngle;
                                 
-                                // 🔥 使用 Blob 取代 DataURL，解決 FB/LINE 內建瀏覽器崩潰問題
+                                // 使用 Blob 取代 DataURL，解決 FB/LINE 內建瀏覽器崩潰問題
                                 bufferCanvas.toBlob((blob) => {
                                     if (!blob) return;
                                     const objectUrl = URL.createObjectURL(blob);
@@ -353,7 +357,6 @@
                                     downloadBtn.onclick = async () => {
                                         try {
                                             const file = new File([blob], `kick_${maxAngleEl.innerText}deg.jpg`, { type: 'image/jpeg' });
-                                            // 優先嘗試系統原生分享 API (支援度佳、可存相簿或傳 LINE)
                                             if (navigator.canShare && navigator.canShare({ files: [file] })) {
                                                 await navigator.share({
                                                     files: [file],
@@ -361,14 +364,12 @@
                                                     text: `最高點角度：${maxAngleEl.innerText} 度！`
                                                 });
                                             } else {
-                                                // 備案：傳統 a 標籤下載
                                                 const link = document.createElement('a');
                                                 link.download = `kick_${maxAngleEl.innerText}deg.jpg`;
                                                 link.href = objectUrl;
                                                 link.click();
                                             }
                                         } catch (e) {
-                                            // 防呆機制：若分享被擋住，提醒直接長按圖片
                                             alert("請直接【長按】畫面右下角的截圖，選擇「儲存圖片」即可！");
                                         }
                                     };
@@ -475,7 +476,6 @@
 
             videoElement.srcObject = currentStream;
             
-            // 🔥 關鍵修正：確保真正拿到影像資料 (onloadeddata) 而不是只有尺寸
             await new Promise((resolve) => { videoElement.onloadeddata = () => resolve(); });
             
             await videoElement.play();
